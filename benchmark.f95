@@ -21,14 +21,14 @@ program benchmark
   real(dp), parameter :: tol = 10E-12
 
 
-  call mishchenko_oblique()
+  call vbirefl_oblique()
 
 
 contains
 
-  subroutine mishchenko_oblique()
+  subroutine vbirefl_oblique()
     !!---------------------------------------------------------------------------
-    !! Name: mishchenko_oblique
+    !! Name: vbirefl_oblique
     !!  Compare vector discrete ordinate method to a polarized bidirectional
     !!  reflectance benchmark results for an oblique beam.
     !!
@@ -65,10 +65,15 @@ contains
     real(dp), dimension(N) :: mu, wt
     ! Results
     real(dp), dimension(4*N, 4, kmax+1) :: reflect ! Reflectance
+    real(dp), dimension(N, 16, kmax+1) :: vdisord
     ! File output name
     character(len=50) :: reflout
     ! Workspace
-    integer(8) :: k ! Loop index.
+    integer(8) :: k, ii, jj ! Loop index.
+    ! Vector Bidirection Reflectance Benchmark Results for comparison.
+    integer, parameter :: N_bm  = 49         ! Number of gridpoints.
+    real(dp), dimension(N_bm) :: mu_bm          ! Array of gridpoints.
+    real(dp), dimension(N_bm, 16, 4) :: vbirefl    ! Benchmark results for comparison.
 
     write (*, '(A)') "> Run benchmark test: halfspace reflectance from oblique beam."
 
@@ -111,6 +116,27 @@ contains
     !---------------------------------------------------------------------------
     write (*, '(A)') "> Run ./venus.sh to print results."
 
+    !---------------------------------------------------------------------------
+    ! Get Vector Bidirectional Reflectance benchmark results.
+    include 'vbirefl_results.f95'
+    !---------------------------------------------------------------------------
+
+
+    !---------------------------------------------------------------------------
+    ! Change reflectance array output to match format of vbirefl results.
+    !
+    do k = 1, kmax+1
+       do ii = 0, N - 1
+          do jj = 1, 4
+             vdisord(ii+1, 4*(jj-1)+1:4*(jj-1)+4, k) = reflect(4*ii+jj, :, k)
+          enddo
+       enddo
+       write(*, '(A,I1,A,E12.4)') 'k = ', k-1,', Max Error = ', &
+            maxval(abs(vdisord(:, : , k) - vbirefl(:, :, k)))
+       write(*, '(A,I1,A,E12.4)') 'k = ', k-1,',  L2 Error = ', &
+            norm2(vdisord(:, : , k) - vbirefl(:, :, k))
+    enddo
+    !---------------------------------------------------------------------------
 
 
     !---------------------------------------------------------------------------
@@ -119,8 +145,7 @@ contains
     deallocate(FL_coeff)
     !---------------------------------------------------------------------------
 
-  end subroutine mishchenko_oblique
-
+  end subroutine vbirefl_oblique
 
 
   subroutine print_refl(N, mu, R0, filename)
@@ -133,7 +158,7 @@ contains
     !!
     !!   INPUT
     !!     Integer ------------- N
-    !!     Double precision ---- mu(N), R0(4*N, N)
+    !!     Double precision ---- mu(N), R0(4*N, 4)
     !!     Character------------ filename(*)
     !!
     !! Purpose
