@@ -19,6 +19,9 @@ MODS = special.o quadratures.o discretize.o solver.o halfspace.o
 benchmark: $(MODS)
 benchmark.o: $(MODS)
 
+test: $(MODS)
+test.o: $(MODS)
+
 
 
 %: %.o

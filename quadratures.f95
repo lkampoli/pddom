@@ -40,7 +40,7 @@ module quadratures
 
   private
   public :: gausslegendre, gausslegendre_truncated, gausslegendre_shifted, &
-       polytest
+       clencurt, polytest
 
 contains
 
@@ -220,6 +220,98 @@ contains
   end subroutine gausslegendre_truncated
 
 
+  subroutine clencurt(N, mu, wt)
+    !!--------------------------------------------------------------------------
+    !! Name: gausslegendre_truncated
+    !!  Compute the Clenshaw-Curtis quadrature of degree N for even N.
+    !!
+    !! Synopsis
+    !!  subroutine clencurt(N, mu, wt)
+    !!
+    !!    INPUT
+    !!     Integer ------------- N
+    !!
+    !!    OUTPUT
+    !!     Double precision ---- mu(N), wt(N)
+    !!
+    !! Purpose
+    !!  Compute the Clenshaw-Curtis quadrature on the interval [-1, 1].
+    !!
+    !!   *Method adapted from Matlab function in book:
+    !!       Spectral Methods in MATLAB by Lloyd N. Trefethen (p.128).
+    !!
+    !! Arguments
+    !!  N (input) integer
+    !!    The number of quadrature points (even).
+    !!
+    !!  mu (output) double precision, array(N)
+    !!    Quadrature points.
+    !!
+    !!  wt (output) double precision, array(N)
+    !!    Associated weights.
+    !!---------------------------------------------------------------------------
+    implicit none
+    integer(8), intent(in) :: N
+    real(dp), intent(out), dimension(N) :: mu, wt
+    real(dp), dimension(N) :: theta
+    integer(8) :: M
+    real(dp) :: tmp1
+    integer(8) :: ii, jj
+
+    !---------------------------------------------------------------------------
+    ! Chebyshev gridpoints mu = cos(theta) where theta[n] = pi * (n-1) / N.
+    !
+    theta(1) = 0.0_dp
+    tmp1 = PI / real(N-1, dp)
+    do ii = 1, N-1
+       theta(ii+1) = tmp1 * real(ii, dp)
+    enddo
+    mu = cos(theta)
+    !---------------------------------------------------------------------------
+
+    !---------------------------------------------------------------------------
+    ! Compute weight
+    !
+    M = N-1
+    if (mod(N, 2) .eq. 0) then
+       wt(1) = 1.0_dp / real((N-1) ** 2, dp)
+       wt(N) = wt(1)
+       wt(2:M) = 1.0_dp
+       do jj = 1, N/2-1
+          ! wt -= 2 * cos(2 * j * theta) / (4 * j^2 - 1)
+          tmp1 = real(2 * jj ** 2, dp) - 0.5_dp
+          wt(2:M) = wt(2:M) - cos(2.0_dp * real(jj, dp) * theta(2:M)) &
+               / tmp1
+       enddo
+       ! wt *= 2 / (M)
+       wt(2:M) = wt(2:M) / (real(N/2, dp) - 0.5_dp)
+    else
+       write(*, '(A)') '> Warning in __quadratures_MOD_clencurt'
+       write(*, '(A)') &
+            '> Warning: Odd number of quadrature points - origin is included.'
+
+       wt(1) = 1.0_dp / real(M ** 2 - 1, dp)
+       wt(N) = wt(1)
+       wt(2:M) = 1.0_dp
+       do jj = 1, M/2 - 1
+          ! wt -= 2 * cos(2 * j * theta) / (4 * j^2 - 1)
+          tmp1 = real(2 * jj ** 2, dp) - 0.5_dp
+          wt(2:M) = wt(2:M) - cos(2.0_dp * real(jj, dp) * theta(2:M)) &
+               / tmp1
+       enddo
+       ! wt -= cos((M) * theta) / ((M)^2 - 1)
+       wt(2:M) = wt(2:M) - cos(real(M, dp) * theta(2:M)) &
+            / real(M ** 2 - 1, dp)
+       ! wt *= 2 / (M)
+       wt(2:M) = wt(2:M) / real(M/2, dp)
+    endif
+
+
+  end subroutine clencurt
+
+
+
+
   subroutine polytest(N, m, a, b, x, wt)
     !!--------------------------------------------------------------------------
     !! Name: polytest
@@ -267,21 +359,26 @@ contains
     !!  wt (output) double precision, array(N)
     !!    Associated weights.
     !!---------------------------------------------------------------------------
-      implicit none
-      ! Input
-      integer(8) :: N, M
-      real(dp) :: a, b
-      real(dp), dimension(N) :: x, wt
-      ! Workspace
-      real(dp) :: apprx
-      real(dp) :: true
-      true = (b ** (M+1) - a ** (M+1)) / real(M+1, dp)
-      apprx = sum(x ** M * wt)
-!!$    write(*, '(A, F4.2, F4.2, A, I2, A, F8.6)') 'Integral[', a, b, '] x^', m, &
-!!$         '  dx = ', true
-!!$    write(*, '(A, F8.6)') 'Quadrature Approximation =  ', apprx
-      write(*, '(A, I4, A, E14.8)') 'M = ', m, ',  Error = ', true - apprx
-      write(*,*) ""
-    end subroutine polytest
+    implicit none
+    ! Input
+    integer(8), intent(in) :: N
+    integer, intent(in) :: M
+    real(dp), intent(in) :: a, b
+    real(dp), intent(in), dimension(N) :: x, wt
+    ! Workspace
+    real(dp) :: approximate, analytic
+    if (M .eq. -1) then
+       analytic = log(b) - log(a)
+    else
+       analytic = (b ** (M+1) - a ** (M+1)) / real(M+1, dp)
+    endif
+    approximate = sum(x ** M * wt)
+    write(*, '(A, F4.1, A, F4.1, A, I4)') &
+         '> Integrate x^m from b to a where: a = ', a, ', b = ',  b, &
+         ', m =  ', M
+    write(*, '(A, F8.6,A, F8.6, A, E12.4)') 'Analytic = ', analytic, &
+    '; Numeric =  ', approximate, '; Error = ', analytic - approximate
+    write(*,*) ""
+  end subroutine polytest
 
 end module quadratures
